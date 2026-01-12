@@ -7,7 +7,8 @@ import type {
   ProjectConfiguration,
 } from '@/types'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://claude-agent-alb-1954565240.us-east-1.elb.amazonaws.com'
+// Use local API routes to proxy requests (avoids mixed content issues)
+const API_BASE_URL = '/api'
 
 class APIClient {
   private getHeaders(): HeadersInit {
@@ -17,7 +18,7 @@ class APIClient {
   }
 
   private buildUrl(path: string, params?: Record<string, string>): string {
-    const url = new URL(path, API_BASE_URL)
+    const url = new URL(path, window.location.origin)
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value) url.searchParams.set(key, value)
@@ -34,7 +35,7 @@ class APIClient {
       params?: Record<string, string>
     }
   ): Promise<T> {
-    const url = this.buildUrl(path, options?.params)
+    const url = this.buildUrl(`${API_BASE_URL}${path}`, options?.params)
 
     const response = await fetch(url, {
       method,
@@ -47,11 +48,16 @@ class APIClient {
       let errorMessage = `API Error: ${response.status}`
       try {
         const errorJson = JSON.parse(errorText)
-        errorMessage = errorJson.detail || errorJson.message || errorMessage
+        errorMessage = errorJson.detail || errorJson.message || errorJson.error || errorMessage
       } catch {
         errorMessage = errorText || errorMessage
       }
       throw new Error(errorMessage)
+    }
+
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return {} as T
     }
 
     return response.json()

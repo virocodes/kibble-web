@@ -35,14 +35,15 @@ export function MessageRow({ message, isStreaming }: MessageRowProps) {
   }
 
   // Assistant message
+  const contentBlocks = message.content_blocks || []
   return (
     <div className="mb-4">
       <div className="text-kibble-text-primary">
-        {message.content_blocks.map((block, index) => (
+        {contentBlocks.map((block, index) => (
           <ContentBlockRenderer
             key={index}
             block={block}
-            isLast={index === message.content_blocks.length - 1}
+            isLast={index === contentBlocks.length - 1}
             isStreaming={isStreaming}
           />
         ))}
@@ -95,7 +96,8 @@ function ContentBlockRenderer({
   }
 }
 
-function getTextContent(blocks: ContentBlock[]): string {
+function getTextContent(blocks?: ContentBlock[]): string {
+  if (!blocks || !Array.isArray(blocks)) return ''
   return blocks
     .filter((b) => b.type === 'text')
     .map((b) => (b.type === 'text' ? b.content : ''))

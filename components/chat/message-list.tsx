@@ -9,10 +9,13 @@ interface MessageListProps {
   streamingMessageId?: string | null
 }
 
-export function MessageList({ messages, streamingMessageId }: MessageListProps) {
+export function MessageList({ messages = [], streamingMessageId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
+
+  // Ensure messages is always an array
+  const safeMessages = Array.isArray(messages) ? messages : []
 
   // Track if user is near bottom
   useEffect(() => {
@@ -34,9 +37,9 @@ export function MessageList({ messages, streamingMessageId }: MessageListProps) 
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, streamingMessageId])
+  }, [safeMessages, streamingMessageId])
 
-  if (messages.length === 0) {
+  if (safeMessages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-kibble-text-tertiary">
         <div className="text-center">
@@ -54,7 +57,7 @@ export function MessageList({ messages, streamingMessageId }: MessageListProps) 
       ref={containerRef}
       className="flex-1 overflow-y-auto px-4 py-4"
     >
-      {messages.map((message) => (
+      {safeMessages.map((message) => (
         <MessageRow
           key={message.id}
           message={message}

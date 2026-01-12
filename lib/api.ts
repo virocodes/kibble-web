@@ -286,6 +286,20 @@ class APIClient {
   async healthCheck(): Promise<{ status: string; active_sessions: number }> {
     return this.request('GET', '/health')
   }
+
+  // Send message via REST (for polling mode)
+  async sendMessage(
+    sessionId: string,
+    message: string,
+    githubToken: string
+  ): Promise<void> {
+    await this.request('POST', `/sessions/${sessionId}/message`, {
+      body: {
+        message,
+        github_token: githubToken,
+      },
+    })
+  }
 }
 
 export const apiClient = new APIClient()

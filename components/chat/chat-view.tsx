@@ -107,12 +107,13 @@ export function ChatView({ sessionId, initialSession }: ChatViewProps) {
         githubToken,
         lastMessageIdRef.current || undefined
       )
-      if (msgs.length > 0) {
+      if (msgs && msgs.length > 0) {
         // Merge new messages, avoiding duplicates
-        const existingIds = new Set(messages.map((m) => m.id))
+        const currentMessages = messages || []
+        const existingIds = new Set(currentMessages.map((m) => m.id))
         const newMsgs = msgs.filter((m) => !existingIds.has(m.id))
         if (newMsgs.length > 0) {
-          setMessages(sessionId, [...messages, ...newMsgs])
+          setMessages(sessionId, [...currentMessages, ...newMsgs])
           lastMessageIdRef.current = msgs[msgs.length - 1].id
         }
       }
@@ -209,7 +210,9 @@ export function ChatView({ sessionId, initialSession }: ChatViewProps) {
     setIsPolling(false)
   }
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
+    if (!githubToken) return
+
     // Create optimistic user message
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -222,12 +225,21 @@ export function ChatView({ sessionId, initialSession }: ChatViewProps) {
     addMessage(sessionId, userMessage)
     setWorkState('working')
 
-    // Send via WebSocket if connected
+    // Send via WebSocket if connected, otherwise use REST API
     if (wsManager.isConnected) {
       wsManager.sendMessage(content)
     } else {
-      // Queue message for later
-      enqueueMessage(content)
+      // Use REST API in polling mode
+      try {
+        await apiClient.sendMessage(sessionId, content, githubToken)
+        // Start polling for the response
+        startPolling()
+      } catch (err) {
+        console.error('Failed to send message:', err)
+        setError(err instanceof Error ? err.message : 'Failed to send message')
+        setWorkState('ready')
+        return
+      }
     }
 
     // Create placeholder for assistant response
@@ -444,7 +456,7 @@ export function ChatView({ sessionId, initialSession }: ChatViewProps) {
       {isActive && (
         <ChatInput
           onSend={handleSendMessage}
-          disabled={isWorking || !wsConnected}
+          disabled={isWorking}
           queueCount={messageQueue.length}
           placeholder={isWorking ? 'Waiting for response...' : undefined}
         />

@@ -29,16 +29,42 @@ class WebSocketManager {
   private lastDisconnectTime: Date | null = null
   private reconnectThrottle = 5000
   private pingInterval: NodeJS.Timeout | null = null
+  private _forcePolling = false
+
+  // Check if we're on HTTPS - WebSocket to ws:// won't work from HTTPS
+  private get shouldUsePolling(): boolean {
+    if (this._forcePolling) return true
+    if (typeof window === 'undefined') return false
+
+    // If page is HTTPS and WebSocket URL is ws://, we must use polling
+    const isHttps = window.location.protocol === 'https:'
+    const isInsecureWs = WS_BASE_URL.startsWith('ws://') && !WS_BASE_URL.startsWith('wss://')
+
+    return isHttps && isInsecureWs
+  }
 
   connect(sessionId: string, callbacks: WebSocketCallbacks): void {
     this.sessionId = sessionId
     this.callbacks = callbacks
     this.shouldReconnect = true
+
+    // If we need to use polling (HTTPS -> ws://), immediately trigger disconnect
+    if (this.shouldUsePolling) {
+      console.log('[WebSocket] Skipping WebSocket (HTTPS page with insecure ws:// endpoint), using polling')
+      this._forcePolling = true
+      // Immediately call onDisconnect to trigger polling fallback
+      setTimeout(() => {
+        this.callbacks.onDisconnect?.(new Error('WebSocket unavailable on HTTPS'))
+      }, 0)
+      return
+    }
+
     this.establishConnection()
   }
 
   private establishConnection(): void {
     if (!this.sessionId) return
+    if (this.shouldUsePolling) return
 
     // Throttle reconnections
     if (this.lastDisconnectTime) {
@@ -166,6 +192,9 @@ class WebSocketManager {
     this.lastDisconnectTime = new Date()
     this.callbacks.onDisconnect?.(error)
 
+    // Don't try to reconnect if we're in forced polling mode
+    if (this._forcePolling) return
+
     if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
       console.log(`[WebSocket] Reconnecting (attempt ${this.reconnectAttempts})...`)
@@ -191,6 +220,7 @@ class WebSocketManager {
 
   disconnect(): void {
     this.shouldReconnect = false
+    this._forcePolling = false
     this.stopPingTimer()
     if (this.ws) {
       this.ws.close()
@@ -230,6 +260,10 @@ class WebSocketManager {
 
   get isConnecting(): boolean {
     return this.ws?.readyState === WebSocket.CONNECTING
+  }
+
+  get isPollingMode(): boolean {
+    return this._forcePolling
   }
 }
 
